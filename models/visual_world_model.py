@@ -297,6 +297,30 @@ class VWorldModel(nn.Module):
         dist_2 = steps_2.norm(dim=-1)
         return ((dist_2 - dist_1) ** 2).mean()
 
+    def compute_geometric_metrics(self, features):
+        if features.dim() == 4:
+            B, T, P, D = features.shape
+            features = features.reshape(B, T, P * D)
+        dev = features.device
+        metrics = {}
+        if features.shape[1] >= 3:
+            v = features[:, 1:] - features[:, :-1]
+            v1, v2 = v[:, :-1], v[:, 1:]
+            cos_sim = F.cosine_similarity(v1, v2, dim=-1)
+            metrics["C_avg"] = cos_sim.mean()
+            second_diff = features[:, 2:] - 2 * features[:, 1:-1] + features[:, :-2]
+            metrics["kappa_avg"] = second_diff.norm(dim=-1).mean()
+        else:
+            metrics["C_avg"] = torch.tensor(0.0, device=dev)
+            metrics["kappa_avg"] = torch.tensor(0.0, device=dev)
+        if features.shape[1] >= 2:
+            v = features[:, 1:] - features[:, :-1]
+            step_sizes = v.norm(dim=-1)
+            metrics["sigma_step"] = step_sizes.std(dim=-1).mean()
+        else:
+            metrics["sigma_step"] = torch.tensor(0.0, device=dev)
+        return metrics
+
     def total_curvature(self, features, mode="cos"):
         if features.shape[1] < 3:
             raise ValueError(f"Features must have at least 3 frames for curvature calculation, got {features.shape[1]}")
@@ -420,6 +444,9 @@ class VWorldModel(nn.Module):
             loss = loss + decoder_loss_reconstructed
         else:
             visual_reconstructed = None
+        if not self.training:
+            _vis = self.visual_only(z)
+            loss_components.update(self.compute_geometric_metrics(_vis))
         loss_components["loss"] = loss
         return z_pred, visual_pred, visual_reconstructed, loss, loss_components
 
