@@ -71,6 +71,14 @@ class VWorldModel(nn.Module):
                 suffix = straighten.replace("cos", "")
                 self.straighten_scale = float(suffix) if suffix else 1.0
                 self.curvature_mode = "cos"
+            elif straighten.startswith("2nd"):
+                suffix = straighten.replace("2nd", "")
+                self.straighten_scale = float(suffix) if suffix else 1.0
+                self.curvature_mode = "2nd"
+            elif straighten.startswith("dist"):
+                suffix = straighten.replace("dist", "")
+                self.straighten_scale = float(suffix) if suffix else 1.0
+                self.curvature_mode = "dist"
 
         self.straighten = self.curvature_mode is not None and self.straighten_scale > 0
 
@@ -274,6 +282,21 @@ class VWorldModel(nn.Module):
             loss = loss[mask]
         return loss.mean()
 
+    def second_difference_loss(self, features):
+        if features.shape[1] < 3:
+            return torch.tensor(0.0, device=features.device)
+        second_diff = features[:, 2:] - 2 * features[:, 1:-1] + features[:, :-2]
+        return (second_diff ** 2).mean()
+
+    def distance_consistency_loss(self, features):
+        if features.shape[1] < 3:
+            return torch.tensor(0.0, device=features.device)
+        steps_1 = features[:, 1:-1] - features[:, :-2]
+        steps_2 = features[:, 2:] - features[:, 1:-1]
+        dist_1 = steps_1.norm(dim=-1)
+        dist_2 = steps_2.norm(dim=-1)
+        return ((dist_2 - dist_1) ** 2).mean()
+
     def total_curvature(self, features, mode="cos"):
         if features.shape[1] < 3:
             raise ValueError(f"Features must have at least 3 frames for curvature calculation, got {features.shape[1]}")
@@ -289,8 +312,12 @@ class VWorldModel(nn.Module):
         elif mode == "cos":
             v1 = features[:, 1:-1] - features[:, :-2]
             v2 = features[:, 2:] - features[:, 1:-1]
+        elif mode == "2nd":
+            return self.second_difference_loss(features)
+        elif mode == "dist":
+            return self.distance_consistency_loss(features)
         else:
-            raise ValueError(f"Unknown curvature mode '{mode}'. Use 'cos' or 'aggcos'.")
+            raise ValueError(f"Unknown curvature mode '{mode}'. Use 'cos', 'aggcos', '2nd', or 'dist'.")
 
         return self._cos_curvature(v1, v2)
 

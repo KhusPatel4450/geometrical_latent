@@ -7,3 +7,10 @@ wandb
 checkpoints
 *.slurm
 *.sh
+
+.claude/
+.cursorrules
+.aider*
+claude_code_regularizer_prompt.md
+CLAUDE.md
+.claude_context*
