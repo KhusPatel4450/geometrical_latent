@@ -1,161 +1,163 @@
-# Temporal Straightening for Latent Planning
+# Geometry-Aware Latent Space Regularization for Planning
 
-**Abstract:** Learning good representations is essential for latent planning with world models. While pretrained visual encoders produce strong semantic visual features, they are not tailored to planning and contain information irrelevant—or even detrimental—to planning. Inspired by the perceptual straightening hypothesis in human visual processing, we introduce temporal straightening to improve representation learning for latent planning. Using a curvature regularizer that encourages locally straightened latent trajectories, we jointly learn an encoder and a predictor. We show that reducing curvature this way makes the Euclidean distance in latent space a better proxy for the geodesic distance and improves the conditioning of the planning objective. We demonstrate empirically that temporal straightening makes gradient-based planning more stable and yields significantly higher success rates across a suite of goal-reaching tasks.
+**Thesis:** Comparing geometry-aware regularization methods for latent planning in reinforcement learning.
 
-<p align="center">
-  &#151; <a href="https://agenticlearning.ai/temporal-straightening/"><b>View Paper Website</b></a> &#151;
-</p>
+**Author:** Khush Patel  
+**Mentor:** Rasa Khosrowshahli  
+**Supervisor:** Beatrice Ombuki-Berman  
+**Date:** January 2026
 
-![teaser_figure](assets/architecture.png)
+---
 
+## Overview
 
-## Getting Started
+This repository contains the experimental code for a comparative study of geometry-aware latent space regularizers. Building on the temporal straightening framework from [Wang et al., 2026](https://arxiv.org/abs/2603.12231), we implement and compare multiple regularization objectives to understand which geometric properties most benefit downstream planning.
 
-1. [Installation](#installation)
-2. [Datasets](#datasets)
-3. [Training](#training)
-4. [Planning](#planning)
+### Research Questions
+
+1. How does latent-space geometry influence planning performance in model-based RL?
+2. How does temporal straightening compare with alternative geometry-aware regularization strategies?
+3. In what task settings does local straightening improve planning, and where does it become insufficient?
+
+---
+
+## Compared Regularizers
+
+| Regularizer | Config | Geometric Property |
+|-------------|--------|-------------------|
+| Prediction-only baseline | `training.straighten=False` | None |
+| VCReg baseline | `training.vcreg=True` | None (non-geometric) |
+| Temporal straightening | `training.straighten=cos1e-1` | Directional alignment |
+| Second-difference smoothness | `training.straighten=2nd1e-1` | Acceleration magnitude |
+| Distance consistency | `training.straighten=dist1e-1` | Step-size uniformity |
+
+---
 
 ## Installation
 
 ```bash
-git clone git@github.com:agentic-learning-ai-lab/temporal-straightening.git
-cd temporal-straightening
+git clone https://github.com/KhusPatel4450/geometrical_latent.git
+cd geometrical_latent
 conda env create -f environment.yaml
 conda activate ts
 ```
 
-### Mujoco
-                    
-Create the `.mujoco` directory and download Mujoco210 using `wget`:
+### Dataset
+
+Download the PointMaze dataset from [OSF](https://osf.io/bmw48/) and set the environment variable:
 
 ```bash
-mkdir -p ~/.mujoco
-wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz -P ~/.mujoco/
-cd ~/.mujoco
-tar -xzvf mujoco210-linux-x86_64.tar.gz
-```
-
-Append the following lines to your `~/.bashrc`:
-
-```bash
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/<username>/.mujoco/mujoco210/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia
-```
-
-Reload your shell configuration to apply the environment variable changes:
-
-```bash
-source ~/.bashrc
-```
-
-For more details, check [DINO-WM](https://github.com/gaoyuezhou/dino_wm).
-
-## Datasets
-
-We use the datasets from [DINO-WM](https://github.com/gaoyuezhou/dino_wm), which can be downloaded [here](https://osf.io/bmw48/?view_only=a56a296ce3b24cceaf408383a175ce28). Unzip the datasets and set an environment variable pointing to your dataset folder:
-```bash
-# Replace /path/to/data with the actual path to your dataset folder.
 export DATASET_DIR=/path/to/data
 ```
-Inside the dataset folder, you should find the following structure:
-```
-data
-├── deformable
-│   ├── granular
-│   └── rope
-├── point_maze
-├── pusht_noise
-└── wall_single
-```
 
-Improve data loading:
-- For PointMaze (`umaze` and `medium`), you might want to use preprocessed data + per-frame loading (`use_preprocessed=true`, `use_frame_files=true`) in `conf/env/point_maze.yaml` and `conf/env/point_maze_medium.yaml` when available.
-- This is often helpful for global-feature runs (for example `encoder=dino_global`) on HPC, where training can otherwise be I/O-bound.
-- Since there can be many small frame files, you might need squashFS (for singularity) or HDF5. NYU HPC has a good summary on [handling large numbers of small files](https://sites.google.com/nyu.edu/nyu-hpc/training-support/general-hpc-topics/ai-at-hpc-tips/large-number-of-small-files).
-- Make sure `dataset.data_path` points to your preprocessed folders.
-
+---
 
 ## Training
-In `conf/train.yaml` (paper setup), default is `frameskip=5`, `num_hist=3`, with frozen DINOv2(patch) backbone. We use stop grad by default to prevent collapse but also have support for vc reg. Don't forget to set output path in `conf/train.yaml`!
 
-Base command:
+### Base command
+
 ```bash
-python train.py --config-name train.yaml env=point_maze
+python train.py env=point_maze encoder=scratch_resnet training.epochs=20 training.batch_size=16
 ```
 
-Variant overrides (append to the base command):
+### Running all experimental conditions
+
 ```bash
-# DINOv2(patch) baseline (no projector, no straightening)
-encoder=dino training.straighten=False
+# 1. Prediction-only baseline
+python train.py env=point_maze encoder=scratch_resnet training.straighten=False training.vcreg=False
 
-# DINOv2(patch) + channel projector
-encoder=dino_channel training.straighten=[False|aggcos1e-1]
+# 2. VCReg baseline
+python train.py env=point_maze encoder=scratch_resnet training.straighten=False training.vcreg=True training.vcreg_std_coeff=0.1 training.vcreg_cov_coeff=0.1
 
-# DINOv2(patch) + global projector
-encoder=dino_global training.straighten=[False|cos1e-1]
+# 3. Temporal straightening
+python train.py env=point_maze encoder=scratch_resnet training.straighten=cos1e-1
 
-# ResNet spatial features (from scratch)
-encoder=scratch_resnet_spatial training.straighten=[False|aggcos1e-1]
+# 4. Second-difference smoothness (NEW)
+python train.py env=point_maze encoder=scratch_resnet training.straighten=2nd1e-1
 
-# ResNet global features (from scratch)
-encoder=scratch_resnet training.straighten=[False|cos1e-1]
+# 5. Distance consistency (NEW)
+python train.py env=point_maze encoder=scratch_resnet training.straighten=dist1e-1
 ```
 
-Straightening options:
-- `training.straighten=False` disables straightening.
-- `training.straighten=cos1e-1` enables patch-wise curvature regularization.
-- `training.straighten=aggcos1e-1` enables pooled-feature curvature regularization.
+### Encoder options
 
-To change pooling head (agg_type can be `mlp|flatten|mean`), check 
+- `encoder=scratch_resnet` — ResNet trained from scratch (faster)
+- `encoder=dino_channel` — Frozen DINOv2 + channel projector (matches original paper)
 
-- Channel projector config: `conf/encoder/dino_channel.yaml`
-  - `agg_type`, `agg_out_dim`, `agg_mlp_hidden_dim`
-- ResNet spatial config: `conf/encoder/scratch_resnet_spatial.yaml`
-  - `agg_type`, `agg_out_dim`, `agg_mlp_hidden_dim`
+For DINOv2 with aggregation, use `aggcos1e-1` instead of `cos1e-1`.
 
-You can edit these files directly or override from CLI, e.g.:
-```bash
-python train.py --config-name train.yaml env=point_maze \
-  encoder=dino_channel \
-  encoder.agg_type=mlp \
-  encoder.agg_out_dim=128 \
-  training.straighten=aggcos1e-1
-```
+---
 
+## Evaluation Metrics
 
-# Planning
-Use one of the three planning configs:
-- `plan_gd.yaml` (open-loop GD)
-- `plan_cem.yaml` (open-loop CEM)
-- `plan_gd_mpc.yaml` (MPC + GD sub-planner)
+The following metrics are logged to Weights & Biases during validation:
 
-Example commands:
+| Metric | Symbol | Description | Expected Best |
+|--------|--------|-------------|---------------|
+| Cosine alignment | `val_C_avg` | Directional consistency (↑ better) | Temporal straightening |
+| Curvature | `val_kappa_avg` | Second-difference magnitude (↓ better) | Second-difference |
+| Step-size std | `val_sigma_step` | Temporal parameterization (↓ better) | Distance consistency |
+
+---
+
+## Planning
+
+After training, evaluate planning performance:
+
 ```bash
 python plan.py --config-name plan_gd.yaml ckpt_base_path=<ckpt_root> model_name=<model_name>
-python plan.py --config-name plan_cem.yaml ckpt_base_path=<ckpt_root> model_name=<model_name>
-python plan.py --config-name plan_gd_mpc.yaml ckpt_base_path=<ckpt_root> model_name=<model_name>
 ```
 
-Notes:
-- PushT: use the same configs, but set `objective.alpha=1` (and for GD-MPC also set `objective.mode=staged`).
-- Frameskip: planning reads `frameskip` from the saved training config and `plan.py` handles it (`goal_H`, `n_taken_actions`, and `sub_planner.horizon` will be divided by `frameskip`). Keep horizons divisible by `frameskip` to avoid truncation or shape mismatch.
+---
 
-
-## Acknowledgement
-
-This repository is adapted from the excellent [DINO-WM](https://github.com/gaoyuezhou/dino_wm) codebase. We are grateful to the DINO-WM authors for sharing a clean, well-structured, and highly useful open-source implementation.
-
-
-## Citation
-
-If you find this repo useful, please cite:
+## Project Structure
 
 ```
+geometrical_latent/
+├── train.py                 # Main training script
+├── plan.py                  # Planning evaluation
+├── models/
+│   └── visual_world_model.py  # Model with regularizers and metrics
+├── conf/
+│   ├── train.yaml           # Training config
+│   └── env/                 # Environment configs
+└── datasets/                # Data loading
+```
+
+---
+
+## New Contributions
+
+This repository extends the original temporal straightening codebase with:
+
+1. **Second-difference smoothness regularizer** — Penalizes acceleration magnitude: `||z_{t+2} - 2z_{t+1} + z_t||²`
+
+2. **Distance consistency regularizer** — Penalizes step-size variation: `(||v_{t+1}|| - ||v_t||)²`
+
+3. **Geometric evaluation metrics** — C_avg, κ_avg, σ_step logged during training
+
+---
+
+## Acknowledgements
+
+This repository is adapted from the [temporal-straightening](https://github.com/agentic-learning-ai-lab/temporal-straightening) codebase by Wang et al. We thank the authors for their excellent open-source implementation.
+
+---
+
+## References
+
+```bibtex
 @article{wang2026temporal_straightening,
   title={Temporal Straightening for Latent Planning},
   author={Wang, Ying and Bounou, Oumayma and Zhou, Gaoyue and Balestriero, Randall and Rudner, Tim GJ and LeCun, Yann and Ren, Mengye},
   journal={arXiv preprint arXiv:2603.12231},
   year={2026}
+}
+
+@inproceedings{bardes2022vicreg,
+  title={VICReg: Variance-Invariance-Covariance Regularization for Self-Supervised Learning},
+  author={Bardes, Adrien and Ponce, Jean and LeCun, Yann},
+  booktitle={ICLR},
+  year={2022}
 }
 ```
