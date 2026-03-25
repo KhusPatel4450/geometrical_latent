@@ -385,6 +385,28 @@ class Trainer:
             vcreg_apply_to=self.cfg.training.get("vcreg_apply_to", "enc"),
         )
         self._log_trainable_params(self.model, "model")
+        self._log_param_counts_to_wandb()
+
+    def _log_param_counts_to_wandb(self):
+        if not self.accelerator.is_main_process:
+            return
+        count = lambda m: sum(p.numel() for p in m.parameters())
+        count_train = lambda m: sum(p.numel() for p in m.parameters() if p.requires_grad)
+        total = count(self.model)
+        trainable = count_train(self.model)
+        param_info = {
+            "model/total_params": total,
+            "model/trainable_params": trainable,
+        }
+        if hasattr(self.model, "encoder") and self.model.encoder is not None:
+            param_info["model/encoder_params"] = count(self.model.encoder)
+        if hasattr(self.model, "predictor") and self.model.predictor is not None:
+            param_info["model/predictor_params"] = count(self.model.predictor)
+        if hasattr(self.model, "decoder") and self.model.decoder is not None:
+            param_info["model/decoder_params"] = count(self.model.decoder)
+        wandb.config.update(param_info, allow_val_change=True)
+        wandb.run.summary["total_params"] = total
+        wandb.run.summary["trainable_params"] = trainable
 
     def init_optimizers(self):
         self.encoder_optimizer = torch.optim.Adam(
@@ -856,6 +878,14 @@ class Trainer:
                 total + sum(value),
             )
 
+    WANDB_KEEP_KEYS = {
+        "train_loss", "train_z_loss", "train_curvature_loss_used_for_training",
+        "val_loss", "val_z_loss",
+        "val_C_avg", "val_kappa_avg", "val_sigma_step",
+        "val_img_ssim_pred", "val_img_psnr_pred",
+        "epoch",
+    }
+
     def logs_flash(self, step):
         epoch_log = OrderedDict()
         for key, value in self.epoch_log.items():
@@ -867,7 +897,10 @@ class Trainer:
                 Validation loss: {epoch_log['val_loss']:.4f}")
 
         if self.accelerator.is_main_process:
-            self.wandb_run.log(epoch_log)
+            filtered_log = OrderedDict(
+                (k, v) for k, v in epoch_log.items() if k in self.WANDB_KEEP_KEYS
+            )
+            self.wandb_run.log(filtered_log)
         self.epoch_log = OrderedDict()
 
     def logs_flash_iter(self, iteration):
