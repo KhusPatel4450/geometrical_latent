@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 import hydra
 import torch
@@ -242,6 +243,17 @@ class Trainer:
             torch.save(ckpt, f"checkpoints/model_{self.epoch}.pth")
             log.info("Saved model to {}".format(os.getcwd()))
             ckpt_path = os.path.join(os.getcwd(), f"checkpoints/model_{self.epoch}.pth")
+            drive_backup_path = os.environ.get("DRIVE_BACKUP_PATH", None)
+            if drive_backup_path:
+                try:
+                    local_ckpt_dir = os.path.join(os.getcwd(), "checkpoints")
+                    drive_ckpt_dir = os.path.join(drive_backup_path, os.path.basename(os.getcwd()), "checkpoints")
+                    if os.path.exists(drive_ckpt_dir):
+                        shutil.rmtree(drive_ckpt_dir)
+                    shutil.copytree(local_ckpt_dir, drive_ckpt_dir)
+                    log.info(f"Backed up checkpoints to {drive_ckpt_dir}")
+                except Exception as e:
+                    log.warning(f"Drive backup failed: {e}")
         else:
             ckpt_path = None
         model_name = self.cfg["saved_folder"].split("/")[-1]
