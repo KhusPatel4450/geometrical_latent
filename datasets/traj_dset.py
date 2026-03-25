@@ -49,6 +49,9 @@ class TrajSubset(TrajDataset, Subset):
             return getattr(self.dataset, name)
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
+        if hasattr(self.dataset, name):
+            return getattr(self.dataset, name)
+
 
 class TrajSlicerDataset(TrajDataset):
     def __init__(
