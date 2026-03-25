@@ -1,5 +1,4 @@
 import os
-import shutil
 import time
 import hydra
 import torch
@@ -225,40 +224,37 @@ class Trainer:
             and self.epoch >= self.decoder_start_epoch
         )
 
+    def _build_ckpt(self):
+        ckpt = {}
+        for k in self._keys_to_save:
+            v = self.__dict__.get(k, None)
+            if k.endswith("_optimizer") and v is not None:
+                ckpt[k] = v.state_dict()
+            elif hasattr(v, "module"):
+                ckpt[k] = self.accelerator.unwrap_model(v)
+            else:
+                ckpt[k] = v
+        return ckpt
+
     def save_ckpt(self):
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
-            if not os.path.exists("checkpoints"):
-                os.makedirs("checkpoints")
-            ckpt = {}
-            for k in self._keys_to_save:
-                v = self.__dict__.get(k, None)
-                if k.endswith("_optimizer") and v is not None:
-                    ckpt[k] = v.state_dict()
-                elif hasattr(v, "module"):
-                    ckpt[k] = self.accelerator.unwrap_model(v)
-                else:
-                    ckpt[k] = v
-            torch.save(ckpt, "checkpoints/model_latest.pth")
-            torch.save(ckpt, f"checkpoints/model_{self.epoch}.pth")
-            log.info("Saved model to {}".format(os.getcwd()))
-            ckpt_path = os.path.join(os.getcwd(), f"checkpoints/model_{self.epoch}.pth")
-            drive_backup_path = os.environ.get("DRIVE_BACKUP_PATH", None)
-            if drive_backup_path:
-                try:
-                    local_ckpt_dir = os.path.join(os.getcwd(), "checkpoints")
-                    drive_ckpt_dir = os.path.join(drive_backup_path, os.path.basename(os.getcwd()), "checkpoints")
-                    if os.path.exists(drive_ckpt_dir):
-                        shutil.rmtree(drive_ckpt_dir)
-                    shutil.copytree(local_ckpt_dir, drive_ckpt_dir)
-                    log.info(f"Backed up checkpoints to {drive_ckpt_dir}")
-                except Exception as e:
-                    log.warning(f"Drive backup failed: {e}")
+            os.makedirs("checkpoints", exist_ok=True)
+            torch.save(self._build_ckpt(), "checkpoints/model_latest.pth")
+            log.info("Saved model_latest.pth to {}".format(os.getcwd()))
+            ckpt_path = os.path.join(os.getcwd(), "checkpoints/model_latest.pth")
         else:
             ckpt_path = None
         model_name = self.cfg["saved_folder"].split("/")[-1]
         model_epoch = self.epoch
         return ckpt_path, model_name, model_epoch
+
+    def save_final_ckpt(self):
+        self.accelerator.wait_for_everyone()
+        if self.accelerator.is_main_process:
+            os.makedirs("checkpoints", exist_ok=True)
+            torch.save(self._build_ckpt(), "checkpoints/model_final.pth")
+            log.info("Saved model_final.pth to {}".format(os.getcwd()))
 
     def load_ckpt(self, filename="model_latest.pth"):
         ckpt = torch.load(filename)
@@ -553,6 +549,7 @@ class Trainer:
                     )
                     with lock:
                         self.job_set.update(jobs)
+        self.save_final_ckpt()
 
     def err_eval_single(self, z_pred, z_tgt):
         logs = {}
@@ -672,15 +669,16 @@ class Trainer:
                         }
                         self.logs_update(img_reconstruction_scores)
 
-                self.plot_samples(
-                    obs["visual"],
-                    visual_out,
-                    visual_reconstructed,
-                    self.epoch,
-                    batch=i,
-                    num_samples=self.num_reconstruct_samples,
-                    phase="train",
-                )
+                if self.cfg.training.get("enable_rollout_plots", False):
+                    self.plot_samples(
+                        obs["visual"],
+                        visual_out,
+                        visual_reconstructed,
+                        self.epoch,
+                        batch=i,
+                        num_samples=self.num_reconstruct_samples,
+                        phase="train",
+                    )
 
             loss_components = {f"train_{k}": [v] for k, v in loss_components.items()}
             self.logs_update(loss_components)
@@ -697,7 +695,7 @@ class Trainer:
         decoder_active = self.decoder_training_active()
         self.model.train_decoder = decoder_active
         self.model.eval()
-        if len(self.train_traj_dset) > 0 and self.cfg.has_predictor:
+        if self.cfg.training.get("enable_rollout_plots", False) and len(self.train_traj_dset) > 0 and self.cfg.has_predictor:
             train_rollout_logs = self.openloop_rollout(
                 self.train_traj_dset, mode="train"
             )
@@ -777,15 +775,16 @@ class Trainer:
                         }
                         self.logs_update(img_reconstruction_scores)
 
-                self.plot_samples(
-                    obs["visual"],
-                    visual_out,
-                    visual_reconstructed,
-                    self.epoch,
-                    batch=i,
-                    num_samples=self.num_reconstruct_samples,
-                    phase="valid",
-                )
+                if self.cfg.training.get("enable_rollout_plots", False):
+                    self.plot_samples(
+                        obs["visual"],
+                        visual_out,
+                        visual_reconstructed,
+                        self.epoch,
+                        batch=i,
+                        num_samples=self.num_reconstruct_samples,
+                        phase="valid",
+                    )
             loss_components = {f"val_{k}": [v] for k, v in loss_components.items()}
             self.logs_update(loss_components)
 
