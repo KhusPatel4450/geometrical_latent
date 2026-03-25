@@ -45,12 +45,16 @@ class TrajSubset(TrajDataset, Subset):
         return self.dataset.get_seq_length(self.indices[idx])
 
     def __getattr__(self, name):
+        # 1. Stop infinite recursion during Windows multiprocessing (pickling)
+        if name.startswith('_'):
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            
+        # 2. Normal behavior: check if the underlying dataset has the attribute
         if hasattr(self.dataset, name):
             return getattr(self.dataset, name)
+            
+        # 3. Fallback: if it's not a special method and not in the dataset, raise an error
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-
-        if hasattr(self.dataset, name):
-            return getattr(self.dataset, name)
 
 
 class TrajSlicerDataset(TrajDataset):
