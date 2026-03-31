@@ -359,16 +359,15 @@ class PlanWorkspace:
 
 
 def load_ckpt(snapshot_path, device):
-    from models.dino import DinoV2Encoder
-    _ = DinoV2Encoder('dinov2_vits14', 'x_norm_patchtokens')
+    print(f"[load_ckpt] Loading checkpoint from: {snapshot_path}")
     with snapshot_path.open("rb") as f:
-        payload = torch.load(f, map_location=device)
-    loaded_keys = []
+        payload = torch.load(f, map_location=device, weights_only=False)
+    print(f"[load_ckpt] Checkpoint keys: {list(payload.keys())}")
     result = {}
     for k, v in payload.items():
         if k in ALL_MODEL_KEYS:
-            loaded_keys.append(k)
             result[k] = v.to(device)
+    print(f"[load_ckpt] Loaded model keys: {list(result.keys())}")
     result["epoch"] = payload["epoch"]
     return result
 
@@ -378,6 +377,8 @@ def load_model(model_ckpt, train_cfg, num_action_repeat, device):
     if model_ckpt.exists():
         result = load_ckpt(model_ckpt, device)
         print(f"Resuming from epoch {result['epoch']}: {model_ckpt}")
+    else:
+        print(f"[load_model] Checkpoint not found: {model_ckpt}")
 
     if "encoder" not in result:
         result["encoder"] = hydra.utils.instantiate(
@@ -390,11 +391,11 @@ def load_model(model_ckpt, train_cfg, num_action_repeat, device):
         base_path = os.path.dirname(os.path.abspath(__file__))
         if train_cfg.env.decoder_path is not None:
             decoder_path = os.path.join(base_path, train_cfg.env.decoder_path)
-            ckpt = torch.load(decoder_path)
+            ckpt = torch.load(decoder_path, weights_only=False)
             if isinstance(ckpt, dict):
                 result["decoder"] = ckpt["decoder"]
             else:
-                result["decoder"] = torch.load(decoder_path)
+                result["decoder"] = torch.load(decoder_path, weights_only=False)
         else:
             raise ValueError(
                 "Decoder path not found in model checkpoint \
