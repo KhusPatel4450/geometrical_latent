@@ -462,7 +462,7 @@ def planning_main(cfg_dict):
         orig_cwd = hydra.utils.get_original_cwd()
         model_path = os.path.join(orig_cwd, ckpt_base_path, cfg_dict['model_name'])
     model_path = os.path.abspath(model_path)
-    with open(os.path.join(model_path, "hydra.yaml"), "r") as f:
+    with open(os.path.join(model_path, "config.yaml"), "r") as f:
         model_cfg = OmegaConf.load(f)
     
     seed(cfg_dict["seed"])
