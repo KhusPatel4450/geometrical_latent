@@ -462,9 +462,27 @@ def planning_main(cfg_dict):
         orig_cwd = hydra.utils.get_original_cwd()
         model_path = os.path.join(orig_cwd, ckpt_base_path, cfg_dict['model_name'])
     model_path = os.path.abspath(model_path)
-    with open(os.path.join(model_path, "config.yaml"), "r") as f:
+    for cfg_filename in ["config.yaml", "hydra.yaml", ".hydra/config.yaml"]:
+        cfg_file = os.path.join(model_path, cfg_filename)
+        if os.path.exists(cfg_file):
+            break
+    else:
+        raise FileNotFoundError(
+            f"No config file found in {model_path}. "
+            f"Tried: config.yaml, hydra.yaml, .hydra/config.yaml"
+        )
+    with open(cfg_file, "r") as f:
         model_cfg = OmegaConf.load(f)
-    
+
+    # Override data_path with current DATASET_DIR if set.
+    # Handles configs saved on a different machine (e.g. trained on Windows, eval on Colab).
+    dataset_dir = os.environ.get("DATASET_DIR")
+    if dataset_dir:
+        old_path = model_cfg.env.dataset.data_path.replace("\\", "/")
+        data_name = old_path.rstrip("/").split("/")[-1]
+        with open_dict(model_cfg):
+            model_cfg.env.dataset.data_path = os.path.join(dataset_dir, data_name)
+
     seed(cfg_dict["seed"])
     _, dset = hydra.utils.call(
         model_cfg.env.dataset,
