@@ -31,7 +31,7 @@ def run_experiment(name, config, base_args):
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}\n")
 
-    cmd = f"python train.py {base_args} {config['args']}"
+    cmd = f"python train.py {base_args} {config['args']} 'hydra.run.dir=checkpoints/{name}'"
     print(f"Command: {cmd}\n")
 
     start_time = time.time()

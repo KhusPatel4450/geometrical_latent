@@ -120,7 +120,7 @@ class Trainer:
             cfg.wandb_run_id = self.wandb_run.id
             OmegaConf.set_struct(cfg, True)
             wandb.run.name = "{}".format(model_name)
-            with open(os.path.join(os.getcwd(), "hydra.yaml"), "w") as f:
+            with open(os.path.join(os.getcwd(), "config.yaml"), "w") as f:
                 f.write(OmegaConf.to_yaml(cfg, resolve=True))
 
         seed(cfg.training.seed)
