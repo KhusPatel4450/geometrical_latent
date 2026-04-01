@@ -462,7 +462,7 @@ def planning_main(cfg_dict):
         orig_cwd = hydra.utils.get_original_cwd()
         model_path = os.path.join(orig_cwd, ckpt_base_path, cfg_dict['model_name'])
     model_path = os.path.abspath(model_path)
-    for cfg_filename in ["config.yaml", "hydra.yaml", ".hydra/config.yaml"]:
+    for cfg_filename in ["config.yaml", "hydra.yaml", ".hydra/config.yaml", "checkpoints/hydra.yaml"]:
         cfg_file = os.path.join(model_path, cfg_filename)
         if os.path.exists(cfg_file):
             break
