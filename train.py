@@ -627,7 +627,6 @@ class Trainer:
 
             if self.moo_enabled:
                 from torchjd import backward as jd_backward
-                from torchjd.aggregation import UPGrad, CAGrad, MGDA, NashMTL, AlignedMTL
 
                 moo_losses = []
                 for obj_name in self.moo_objectives:
@@ -639,10 +638,22 @@ class Trainer:
                             moo_losses.append(loss_components[key])
 
                 if self.moo_algorithm == "amtl":
+                    from torchjd.aggregation import AlignedMTL
                     aggregator = AlignedMTL(scale_mode=self.amtl_scale_mode)
+                elif self.moo_algorithm == "upgrad":
+                    from torchjd.aggregation import UPGrad
+                    aggregator = UPGrad()
+                elif self.moo_algorithm == "mgda":
+                    from torchjd.aggregation import MGDA
+                    aggregator = MGDA()
+                elif self.moo_algorithm == "cagrad":
+                    from torchjd.aggregation import CAGrad
+                    aggregator = CAGrad()
+                elif self.moo_algorithm == "nash":
+                    from torchjd.aggregation import NashMTL
+                    aggregator = NashMTL()
                 else:
-                    agg_map = {"upgrad": UPGrad, "cagrad": CAGrad, "mgda": MGDA, "nash": NashMTL}
-                    aggregator = agg_map[self.moo_algorithm]()
+                    raise ValueError(f"Unknown MOO algorithm: {self.moo_algorithm}")
 
                 moo_params = []
                 for module in [self.encoder, self.predictor, self.action_encoder, self.proprio_encoder]:
