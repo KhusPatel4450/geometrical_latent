@@ -660,7 +660,7 @@ class Trainer:
                     if module is not None:
                         moo_params.extend(p for p in module.parameters() if p.requires_grad)
 
-                jd_backward(moo_losses, inputs=moo_params)
+                jd_backward(moo_losses, inputs=moo_params, parallel_chunk_size=1)
                 jac_to_grad(moo_params, aggregator)
 
                 if decoder_active:
