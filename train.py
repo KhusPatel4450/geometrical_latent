@@ -626,7 +626,7 @@ class Trainer:
                 self.action_encoder_optimizer.zero_grad()
 
             if self.moo_enabled:
-                from torchjd import backward as jd_backward
+                from torchjd.autojac import backward as jd_backward, jac_to_grad
 
                 moo_losses = []
                 for obj_name in self.moo_objectives:
@@ -660,7 +660,8 @@ class Trainer:
                     if module is not None:
                         moo_params.extend(p for p in module.parameters() if p.requires_grad)
 
-                jd_backward(moo_losses, moo_params, aggregator)
+                jd_backward(moo_losses, inputs=moo_params)
+                jac_to_grad(moo_params, aggregator)
 
                 if decoder_active:
                     decoder_loss = loss_components.get("decoder_loss_reconstructed")
