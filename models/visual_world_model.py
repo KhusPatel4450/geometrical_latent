@@ -81,6 +81,8 @@ class VWorldModel(nn.Module):
                 self.curvature_mode = "dist"
 
         self.straighten = self.curvature_mode is not None and self.straighten_scale > 0
+        self.use_moo = False
+        self.regularizer_config = None
 
         log.info("num_action_repeat: %s", self.num_action_repeat)
         log.info("num_proprio_repeat: %s", self.num_proprio_repeat)
@@ -345,6 +347,24 @@ class VWorldModel(nn.Module):
 
         return self._cos_curvature(v1, v2)
 
+    def compute_regularizer_losses(self, z):
+        """Compute all regularizer losses individually (no scaling).
+        Returns dict of {name: scalar_loss_tensor} with grad attached."""
+        feats = self.visual_only(z)
+        losses = {}
+        if feats.shape[1] >= 3:
+            v1 = feats[:, 1:-1] - feats[:, :-2]
+            v2 = feats[:, 2:] - feats[:, 1:-1]
+            losses["straightening"] = self._cos_curvature(v1, v2)
+            losses["second_difference"] = self.second_difference_loss(feats)
+            losses["distance_consistency"] = self.distance_consistency_loss(feats)
+        else:
+            dev = z.device
+            losses["straightening"] = torch.tensor(0.0, device=dev)
+            losses["second_difference"] = torch.tensor(0.0, device=dev)
+            losses["distance_consistency"] = torch.tensor(0.0, device=dev)
+        return losses
+
     def forward(self, obs, act):
         """
         input:  obs (dict):  "visual", "proprio" (b, num_frames, 3, img_size, img_size)
@@ -414,7 +434,16 @@ class VWorldModel(nn.Module):
                 loss_components["z_vcreg_loss_scaled"] = z_reg_loss
                 loss = loss + z_reg_loss
 
-            if self.straighten and self.straighten_scale > 0:
+            if self.use_moo or self.regularizer_config:
+                reg_losses = self.compute_regularizer_losses(z)
+                for name, val in reg_losses.items():
+                    loss_components[f"reg_{name}"] = val
+                if not self.use_moo and self.regularizer_config:
+                    for name, cfg in self.regularizer_config.items():
+                        if cfg["enabled"] and name in reg_losses:
+                            loss = loss + reg_losses[name] * cfg["lambda"]
+                            loss_components[f"reg_{name}_scaled"] = reg_losses[name] * cfg["lambda"]
+            elif self.straighten and self.straighten_scale > 0:
                 feats = self.visual_only(z)
                 curvature_loss = self.total_curvature(feats, mode=self.curvature_mode)
                 loss = loss + curvature_loss * self.straighten_scale

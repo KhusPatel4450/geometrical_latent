@@ -392,6 +392,26 @@ class Trainer:
             vcreg_cov_coeff=self.cfg.training.get("vcreg_cov_coeff", 0),
             vcreg_apply_to=self.cfg.training.get("vcreg_apply_to", "enc"),
         )
+        # Configure MOO / combined regularizers
+        self.moo_enabled = False
+        use_old_straighten = isinstance(self.cfg.training.get("straighten", False), str)
+        if not use_old_straighten:
+            moo_cfg = self.cfg.training.get("moo", {})
+            reg_cfg = self.cfg.training.get("regularizers", {})
+            if moo_cfg.get("enabled", False):
+                self.model.use_moo = True
+                self.moo_enabled = True
+                self.moo_algorithm = moo_cfg.get("algorithm", "upgrad")
+                self.moo_objectives = list(moo_cfg.get("objectives", []))
+                self.amtl_scale_mode = moo_cfg.get("amtl_scale_mode", "min")
+                log.info("MOO enabled: algorithm=%s, objectives=%s", self.moo_algorithm, self.moo_objectives)
+            elif any(v.get("enabled", False) for k, v in reg_cfg.items() if isinstance(v, dict)):
+                self.model.regularizer_config = {
+                    k: {"enabled": v.get("enabled", False), "lambda": v.get("lambda", 0.1)}
+                    for k, v in reg_cfg.items() if isinstance(v, dict)
+                }
+                log.info("Combined regularizers: %s", self.model.regularizer_config)
+
         self._log_trainable_params(self.model, "model")
         self._log_param_counts_to_wandb()
 
@@ -605,7 +625,38 @@ class Trainer:
                 self.predictor_optimizer.zero_grad()
                 self.action_encoder_optimizer.zero_grad()
 
-            self.accelerator.backward(loss)
+            if self.moo_enabled:
+                from torchjd import backward as jd_backward
+                from torchjd.aggregation import UPGrad, CAGrad, MGDA, NashMTL, AlignedMTL
+
+                moo_losses = []
+                for obj_name in self.moo_objectives:
+                    if obj_name == "prediction":
+                        moo_losses.append(loss_components["z_loss"])
+                    else:
+                        key = f"reg_{obj_name}"
+                        if key in loss_components:
+                            moo_losses.append(loss_components[key])
+
+                if self.moo_algorithm == "amtl":
+                    aggregator = AlignedMTL(scale_mode=self.amtl_scale_mode)
+                else:
+                    agg_map = {"upgrad": UPGrad, "cagrad": CAGrad, "mgda": MGDA, "nash": NashMTL}
+                    aggregator = agg_map[self.moo_algorithm]()
+
+                moo_params = []
+                for module in [self.encoder, self.predictor, self.action_encoder, self.proprio_encoder]:
+                    if module is not None:
+                        moo_params.extend(p for p in module.parameters() if p.requires_grad)
+
+                jd_backward(moo_losses, moo_params, aggregator)
+
+                if decoder_active:
+                    decoder_loss = loss_components.get("decoder_loss_reconstructed")
+                    if decoder_loss is not None and decoder_loss.requires_grad:
+                        decoder_loss.backward()
+            else:
+                self.accelerator.backward(loss)
 
             if self.model.train_encoder:
                 self.encoder_optimizer.step()

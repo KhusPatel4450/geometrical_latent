@@ -22,6 +22,30 @@ EXPERIMENTS = {
         "name": "distance_consistency",
         "args": "training.straighten=dist1e-1",
     },
+    "combined_manual": {
+        "name": "combined_manual",
+        "args": "training.regularizers.straightening.enabled=true training.regularizers.straightening.lambda=0.1 training.regularizers.second_difference.enabled=true training.regularizers.second_difference.lambda=0.1",
+    },
+    "moo_upgrad": {
+        "name": "moo_upgrad",
+        "args": "training.moo.enabled=true training.moo.algorithm=upgrad 'training.moo.objectives=[prediction,straightening,second_difference]'",
+    },
+    "moo_cagrad": {
+        "name": "moo_cagrad",
+        "args": "training.moo.enabled=true training.moo.algorithm=cagrad 'training.moo.objectives=[prediction,straightening,second_difference]'",
+    },
+    "moo_amtl_min": {
+        "name": "moo_amtl_min",
+        "args": "training.moo.enabled=true training.moo.algorithm=amtl training.moo.amtl_scale_mode=min 'training.moo.objectives=[prediction,straightening,second_difference]'",
+    },
+    "moo_amtl_median": {
+        "name": "moo_amtl_median",
+        "args": "training.moo.enabled=true training.moo.algorithm=amtl training.moo.amtl_scale_mode=median 'training.moo.objectives=[prediction,straightening,second_difference]'",
+    },
+    "moo_amtl_rmse": {
+        "name": "moo_amtl_rmse",
+        "args": "training.moo.enabled=true training.moo.algorithm=amtl training.moo.amtl_scale_mode=rmse 'training.moo.objectives=[prediction,straightening,second_difference]'",
+    },
 }
 
 

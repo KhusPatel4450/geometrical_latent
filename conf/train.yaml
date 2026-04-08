@@ -49,6 +49,28 @@ training:
   vcreg_std_coeff: 0
   vcreg_cov_coeff: 0
   mixed_precision: bf16
+  # Combined regularizers with manual lambda weighting
+  # Use these instead of 'straighten' to enable multiple regularizers at once
+  regularizers:
+    straightening:
+      enabled: false
+      lambda: 0.1
+    second_difference:
+      enabled: false
+      lambda: 0.1
+    distance_consistency:
+      enabled: false
+      lambda: 0.1
+  # Multi-Objective Optimization (MOO) via TorchJD
+  # Automatically balances objectives without manual lambda tuning
+  moo:
+    enabled: false
+    algorithm: upgrad  # upgrad, cagrad, mgda, nash, amtl
+    amtl_scale_mode: min  # only used when algorithm=amtl; options: min, median, rmse
+    objectives:
+      - prediction
+      - straightening
+      - second_difference
 
 img_size: 224 # should be a multiple of 224
 frameskip: 5
