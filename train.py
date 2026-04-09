@@ -183,6 +183,10 @@ class Trainer:
         )
         self._keys_to_save += ["action_encoder", "proprio_encoder"]
 
+        # Pre-check MOO enabled flag (needed by init_models for wandb.watch guard)
+        moo_cfg = self.cfg.training.get("moo", {})
+        self.moo_enabled = moo_cfg.get("enabled", False)
+
         self.init_models()
         self.init_optimizers()
 
