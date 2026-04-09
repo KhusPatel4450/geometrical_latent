@@ -309,7 +309,7 @@ class Trainer:
 
         self.action_encoder = self.accelerator.prepare(self.action_encoder)
 
-        if self.accelerator.is_main_process:
+        if self.accelerator.is_main_process and not self.moo_enabled:
             self.wandb_run.watch(self.action_encoder)
             self.wandb_run.watch(self.proprio_encoder)
 
@@ -660,7 +660,7 @@ class Trainer:
                     if module is not None:
                         moo_params.extend(p for p in module.parameters() if p.requires_grad)
 
-                jd_backward(moo_losses, inputs=moo_params, parallel_chunk_size=1)
+                jd_backward(moo_losses, inputs=moo_params)
                 jac_to_grad(moo_params, aggregator)
 
                 if decoder_active:
