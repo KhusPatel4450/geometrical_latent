@@ -261,7 +261,7 @@ class Trainer:
             log.info("Saved model_final.pth to {}".format(os.getcwd()))
 
     def load_ckpt(self, filename="model_latest.pth"):
-        ckpt = torch.load(filename)
+        ckpt = torch.load(filename, weights_only=False)
         self._loaded_optim_state = {}
         for k, v in ckpt.items():
             if k.endswith("_optimizer") and isinstance(v, dict):
@@ -527,7 +527,7 @@ class Trainer:
             self.monitor_thread.start()
 
         init_epoch = self.epoch + 1  # epoch starts from 1
-        for epoch in range(init_epoch, init_epoch + self.total_epochs):
+        for epoch in range(init_epoch, self.total_epochs + 1):
             self.epoch = epoch
             if self.accelerator.is_main_process:
                 decoder_active = self.decoder_training_active()
