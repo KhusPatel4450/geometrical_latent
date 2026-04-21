@@ -1,4 +1,5 @@
 import os
+import sys
 import gym
 import json
 import time
@@ -484,6 +485,14 @@ def planning_main(cfg_dict):
             model_cfg.env.dataset.data_path = os.path.join(dataset_dir, data_name)
 
     seed(cfg_dict["seed"])
+
+    # Evict HuggingFace's `datasets` from sys.modules so our local datasets/
+    # package takes priority when Hydra resolves the _target_ below.
+    _hf = sys.modules.get('datasets')
+    if _hf is not None and not hasattr(_hf, 'point_maze_dset'):
+        for _k in [k for k in sys.modules if k == 'datasets' or k.startswith('datasets.')]:
+            del sys.modules[_k]
+
     _, dset = hydra.utils.call(
         model_cfg.env.dataset,
         num_hist=model_cfg.num_hist,

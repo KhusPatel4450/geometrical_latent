@@ -17,7 +17,7 @@ torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", pretrained=False)
 
 ### Cell 2: Install Dependencies
 ```python
-!pip install hydra-core==1.3.2 omegaconf wandb accelerate torchjd einops
+!pip install hydra-core==1.3.2 omegaconf wandb accelerate torchjd einops mujoco
 ```
 
 ### Cell 3: Clone Repo (first time only)
@@ -83,7 +83,7 @@ Prepend `PYTHONPATH="/root/.cache/torch/hub/facebookresearch_dinov2_main:$PYTHON
 
 ### Eval: AMTL min (MPC)
 ```python
-!cd /content/geometrical_latent && PYTHONPATH="/root/.cache/torch/hub/facebookresearch_dinov2_main:$PYTHONPATH" python plan.py \
+!cd /content/geometrical_latent && DATASET_DIR=/content/drive/MyDrive/temporal_straightening_data PYTHONPATH="/root/.cache/torch/hub/facebookresearch_dinov2_main:$PYTHONPATH" python plan.py \
   --config-name plan_gd_mpc \
   ckpt_base_path=/content/drive/MyDrive/temporal_straightening_data/checkpoints/moo_amtl_min/checkpoints \
   model_name=moo_amtl_min_f5_h3_p1 \
