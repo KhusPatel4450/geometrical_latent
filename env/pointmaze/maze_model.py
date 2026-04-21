@@ -285,7 +285,11 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
     def set_marker(self):
         if not self.with_target:
             self.set_target(OFF_TARGET)
-        self.data.site_xpos[self.model.site_name2id('target_site')] = np.array([self._target[0]+1, self._target[1]+1, 0.0])
+        try:
+            site_id = self.model.site_name2id('target_site')
+            self.data.site_xpos[site_id] = np.array([self._target[0]+1, self._target[1]+1, 0.0])
+        except (AttributeError, Exception):
+            pass  # visualization only; site_name2id removed in new mujoco API
 
     def clip_velocity(self):
         qvel = np.clip(self.data.qvel, -5.0, 5.0)
