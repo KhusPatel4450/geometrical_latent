@@ -267,8 +267,8 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
 
     def _get_obs(self):
         obs = {
-            "visual": np.concatenate([self.sim.data.qpos, self.sim.data.qvel]).ravel().astype(np.float32),
-            "proprio": np.concatenate([self.sim.data.qpos, self.sim.data.qvel]).ravel().astype(np.float32),
+            "visual": np.concatenate([self.data.qpos, self.data.qvel]).ravel().astype(np.float32),
+            "proprio": np.concatenate([self.data.qpos, self.data.qvel]).ravel().astype(np.float32),
         }
         return obs
 
@@ -288,8 +288,8 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
         self.data.site_xpos[self.model.site_name2id('target_site')] = np.array([self._target[0]+1, self._target[1]+1, 0.0])
 
     def clip_velocity(self):
-        qvel = np.clip(self.sim.data.qvel, -5.0, 5.0)
-        self.set_state(self.sim.data.qpos, qvel)
+        qvel = np.clip(self.data.qvel, -5.0, 5.0)
+        self.set_state(self.data.qpos, qvel)
 
     def reset_model(self):
         idx = self.np_random.choice(len(self.empty_and_goal_locations))
@@ -302,7 +302,11 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
         return self._get_obs()
 
     def reset_to_location(self, location):
-        self.sim.reset()
+        try:
+            self.sim.reset()
+        except AttributeError:
+            import mujoco as _mj
+            _mj.mj_resetData(self.model, self.data)
         reset_location = np.array(location).astype(self.observation_space.dtype)
         qpos = reset_location + self.np_random.uniform(low=-.1, high=.1, size=self.model.nq)
         qvel = self.init_qvel + self.np_random.randn(self.model.nv) * .1
@@ -319,7 +323,11 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
         self.set_marker()
     
     def reset(self):
-        self.sim.reset()
+        try:
+            self.sim.reset()
+        except AttributeError:
+            import mujoco as _mj
+            _mj.mj_resetData(self.model, self.data)
         self.set_init_state(self.reset_to_state)
         state = self.reset_to_state
         if state is None:
