@@ -486,12 +486,15 @@ def planning_main(cfg_dict):
 
     seed(cfg_dict["seed"])
 
-    # Evict HuggingFace's `datasets` from sys.modules so our local datasets/
-    # package takes priority when Hydra resolves the _target_ below.
-    _hf = sys.modules.get('datasets')
-    if _hf is not None and not hasattr(_hf, 'point_maze_dset'):
-        for _k in [k for k in sys.modules if k == 'datasets' or k.startswith('datasets.')]:
-            del sys.modules[_k]
+    # Hydra changes cwd to hydra.run.dir, so '' in sys.path no longer points
+    # to the repo. Insert the absolute repo root so our local datasets/ package
+    # always takes priority over HuggingFace's datasets, regardless of cwd.
+    _repo_root = os.path.dirname(os.path.abspath(__file__))
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+    # Also evict any already-cached HuggingFace datasets entries.
+    for _k in [k for k in sys.modules if k == 'datasets' or k.startswith('datasets.')]:
+        del sys.modules[_k]
 
     _, dset = hydra.utils.call(
         model_cfg.env.dataset,
