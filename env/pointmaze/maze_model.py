@@ -366,6 +366,8 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
         self.random_state = np.random.RandomState(seed)
         
     def prepare_for_render(self):
+        if not hasattr(self, 'sim'):
+            return None, None  # new mujoco API; rendering context not needed for state-based eval
         self.return_value='obs'
         init_state = np.array([1.0856, 1.9746, 0.0098, 0.0217])
         self.set_state(init_state[:2],init_state[2:])
