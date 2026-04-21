@@ -96,6 +96,7 @@ class PlanEvaluator:  # evaluator for planning
         n_evals = actions.shape[0]
         if action_len is None:
             action_len = np.full(n_evals, np.inf)
+
         # rollout in wm
         trans_obs_0 = move_to_device(
             self.preprocessor.transform_obs(self.obs_0), self.device
@@ -127,7 +128,16 @@ class PlanEvaluator:  # evaluator for planning
             e_state=e_final_state,
             e_obs=e_final_obs,
             i_z_obs=i_final_z_obs,
+            trans_obs_g=trans_obs_g,
         )
+
+        # Geometric metrics on the imagined latent trajectory (C_avg, kappa_avg, sigma_step)
+        with torch.no_grad():
+            geo = self.wm.compute_geometric_metrics(i_z_obses["visual"])
+        logs.update({k: v.item() for k, v in geo.items()})
+
+        # Latent prediction quality (E_pred, E_roll)
+        logs.update(self._compute_pred_metrics(e_obses, i_z_obses))
 
         # plot trajs
         if self.decode_for_viz and self.wm.decoder is not None:
@@ -148,12 +158,54 @@ class PlanEvaluator:  # evaluator for planning
 
         return logs, successes, e_obses, e_states
 
-    def _compute_rollout_metrics(self, e_state, e_obs, i_z_obs):
+    def _compute_pred_metrics(self, e_obses, i_z_obses):
+        """E_pred (next-step) and E_roll (multi-step) latent prediction error.
+
+        Compares the open-loop WM rollout predictions against real encoded
+        observations from the environment at WM timescale (every frameskip steps).
+        """
+        try:
+            num_hist = self.wm.num_hist
+            # i_z_obses["visual"]: (b, num_hist + T + 1, P, D)
+            T_pred = i_z_obses["visual"].shape[1] - num_hist - 1
+            if T_pred <= 0:
+                return {}
+
+            # Subsample env obs at WM timescale (every frameskip env steps = 1 WM step)
+            e_obs_wm = {k: v[:, ::self.frameskip] for k, v in e_obses.items()}
+            T_avail = min(T_pred, e_obs_wm["visual"].shape[1] - 1)
+            e_obs_wm = {k: v[:, : T_avail + 1] for k, v in e_obs_wm.items()}
+
+            # Transform and encode real env observations
+            trans_e_obs = move_to_device(
+                self.preprocessor.transform_obs(e_obs_wm), self.device
+            )
+            with torch.no_grad():
+                real_z = self.wm.encode_obs(trans_e_obs)  # (b, T_avail+1, P, D)
+
+            # Predicted latents from open-loop WM rollout (steps 1..T_avail)
+            i_pred = i_z_obses["visual"][:, num_hist : num_hist + T_avail]  # (b, T_avail, P, D)
+            r_real = real_z["visual"][:, 1 : T_avail + 1]                   # (b, T_avail, P, D)
+
+            b, t = i_pred.shape[:2]
+            i_flat = i_pred.reshape(b, t, -1)
+            r_flat = r_real.reshape(b, t, -1)
+            step_errors = (i_flat - r_flat).pow(2).mean(dim=-1)  # (b, t)
+
+            return {
+                "E_pred": step_errors[:, 0].mean().item(),  # next-step prediction error
+                "E_roll": step_errors.mean().item(),         # avg rollout prediction error
+            }
+        except Exception:
+            return {}
+
+    def _compute_rollout_metrics(self, e_state, e_obs, i_z_obs, trans_obs_g):
         """
         Args
             e_state
             e_obs
             i_z_obs
+            trans_obs_g: preprocessed goal observation (for E_goal computation)
         Return
             logs
             successes
@@ -186,6 +238,16 @@ class PlanEvaluator:  # evaluator for planning
             "mean_div_visual_emb": div_visual_emb,
             "mean_div_proprio_emb": div_proprio_emb,
         })
+
+        # E_goal: terminal planning error — latent distance between final imagined
+        # state and goal encoding (Exploratory Metric, Section 5.6.4)
+        with torch.no_grad():
+            z_g = self.wm.encode_obs(trans_obs_g)
+        b = i_z_obs["visual"].shape[0]
+        i_z_flat = i_z_obs["visual"].reshape(b, -1)
+        z_g_flat = z_g["visual"][:, -1].reshape(b, -1)  # last frame of goal encoding
+        E_goal = torch.norm(i_z_flat - z_g_flat, dim=-1).mean().item()
+        logs["E_goal"] = E_goal
 
         return logs, successes
 
