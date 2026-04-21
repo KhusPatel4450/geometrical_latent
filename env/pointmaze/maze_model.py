@@ -1,6 +1,8 @@
 """ A pointmass maze env."""
+import os
 import sys
 from unittest.mock import MagicMock
+os.environ.setdefault('MUJOCO_GL', 'egl')  # headless offscreen rendering via EGL
 # mujoco_py doesn't compile on Python 3.12; mock it before d4rl imports it
 if 'mujoco_py' not in sys.modules:
     sys.modules['mujoco_py'] = MagicMock()
