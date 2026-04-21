@@ -355,9 +355,19 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
         return obs, state
     
     def _render_frame(self):
-        obs = self.sim.render(224, 224)
-        return obs
-    
+        try:
+            return self.sim.render(224, 224)
+        except AttributeError:
+            import mujoco as _mj
+            if not hasattr(self, '_mj_renderer'):
+                self._mj_renderer = _mj.Renderer(self.model, height=224, width=224)
+                self._mj_cam = _mj.MjvCamera()
+                self._mj_cam.azimuth = 90.0
+                self._mj_cam.elevation = -90.0
+            self._mj_renderer.update_scene(self.data, self._mj_cam)
+            return self._mj_renderer.render()
+
+
     def seed(self, seed=None):
         if seed is None:
             seed = np.random.randint(0, 25536)
@@ -366,15 +376,17 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
         self.random_state = np.random.RandomState(seed)
         
     def prepare_for_render(self):
-        if not hasattr(self, 'sim'):
-            return None, None  # new mujoco API; rendering context not needed for state-based eval
-        self.return_value='obs'
+        self.return_value = 'obs'
         init_state = np.array([1.0856, 1.9746, 0.0098, 0.0217])
-        self.set_state(init_state[:2],init_state[2:])
-        img = self.sim.render(224, 224)
-        assert self.sim.render_contexts != 0, "Rendering failed"
-        self.sim.render_contexts[0].cam.azimuth = 90
-        self.sim.render_contexts[0].cam.elevation = -90
-        img1 = self.sim.render(224, 224)
+        self.set_state(init_state[:2], init_state[2:])
+        try:
+            img = self.sim.render(224, 224)
+            assert self.sim.render_contexts != 0, "Rendering failed"
+            self.sim.render_contexts[0].cam.azimuth = 90
+            self.sim.render_contexts[0].cam.elevation = -90
+            img1 = self.sim.render(224, 224)
+        except AttributeError:
+            img = self._render_frame()
+            img1 = self._render_frame()
         return img, img1
 
