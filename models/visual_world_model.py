@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import logging
 from torchvision import transforms
 from einops import rearrange, repeat
+from torch.utils.checkpoint import checkpoint as gradient_checkpoint
 
 log = logging.getLogger(__name__)
 
@@ -490,7 +491,7 @@ class VWorldModel(nn.Module):
         return z
 
 
-    def rollout(self, obs_0, act):
+    def rollout(self, obs_0, act, use_grad_checkpoint=False):
         """
         input:  obs_0 (dict): (b, n, 3, img_size, img_size)
                   act: (b, t+n, action_dim)
@@ -500,18 +501,24 @@ class VWorldModel(nn.Module):
         """
         num_obs_init = obs_0['visual'].shape[1]
         act_0 = act[:, :num_obs_init]
-        action = act[:, num_obs_init:] 
+        action = act[:, num_obs_init:]
         z = self.encode(obs_0, act_0)
         t = 0
         inc = 1
         while t < action.shape[1]:
-            z_pred = self.predict(z[:, -self.num_hist :])
+            if use_grad_checkpoint:
+                z_pred = gradient_checkpoint(self.predict, z[:, -self.num_hist :], use_reentrant=False)
+            else:
+                z_pred = self.predict(z[:, -self.num_hist :])
             z_new = z_pred[:, -inc:, ...]
             z_new = self.replace_actions_from_z(z_new, action[:, t : t + inc, :])
             z = torch.cat([z, z_new], dim=1)
             t += inc
 
-        z_pred = self.predict(z[:, -self.num_hist :])
+        if use_grad_checkpoint:
+            z_pred = gradient_checkpoint(self.predict, z[:, -self.num_hist :], use_reentrant=False)
+        else:
+            z_pred = self.predict(z[:, -self.num_hist :])
         z_new = z_pred[:, -1 :, ...] # take only the next pred
         z = torch.cat([z, z_new], dim=1)
         z_obses, z_acts = self.separate_emb(z)
