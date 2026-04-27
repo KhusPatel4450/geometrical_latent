@@ -283,6 +283,8 @@ class VWorldModel(nn.Module):
             step2 = v2.norm(dim=-1)
             mask = (step1 > step_thresh) & (step2 > step_thresh)
             loss = loss[mask]
+        if loss.numel() == 0:
+            return torch.tensor(0.0, device=v1.device, dtype=v1.dtype)
         return loss.mean()
 
     def second_difference_loss(self, features):

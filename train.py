@@ -441,8 +441,9 @@ class Trainer:
         wandb.run.summary["trainable_params"] = trainable
 
     def init_optimizers(self):
+        trainable_encoder_params = [p for p in self.encoder.parameters() if p.requires_grad]
         self.encoder_optimizer = torch.optim.Adam(
-            self.encoder.parameters(),
+            trainable_encoder_params,
             lr=self.cfg.training.encoder_lr,
         )
         self.encoder_optimizer = self.accelerator.prepare(self.encoder_optimizer)
@@ -674,11 +675,21 @@ class Trainer:
             else:
                 self.accelerator.backward(loss)
 
+            max_grad_norm = 1.0
             if self.model.train_encoder:
+                torch.nn.utils.clip_grad_norm_(
+                    (p for p in self.encoder.parameters() if p.requires_grad), max_grad_norm
+                )
                 self.encoder_optimizer.step()
             if decoder_active:
+                torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), max_grad_norm)
                 self.decoder_optimizer.step()
             if self.cfg.has_predictor and self.model.train_predictor:
+                torch.nn.utils.clip_grad_norm_(self.predictor.parameters(), max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(
+                    list(self.action_encoder.parameters()) + list(self.proprio_encoder.parameters()),
+                    max_grad_norm,
+                )
                 self.predictor_optimizer.step()
                 self.action_encoder_optimizer.step()
 
