@@ -130,6 +130,7 @@ class GDPlanner(BasePlanner):
             if scheduler is not None:
                 scheduler.step()
             with torch.no_grad():
+                actions.clamp_(-3, 3)
                 actions += torch.randn_like(actions) * self.action_noise  # Add Gaussian noise
 
             self.wandb_run.log(
