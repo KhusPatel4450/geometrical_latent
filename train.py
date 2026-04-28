@@ -240,11 +240,16 @@ class Trainer:
                 ckpt[k] = v
         return ckpt
 
-    def save_ckpt(self):
+    def save_ckpt(self, epoch_completed=True):
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
             os.makedirs("checkpoints", exist_ok=True)
-            torch.save(self._build_ckpt(), "checkpoints/model_latest.pth")
+            ckpt = self._build_ckpt()
+            if not epoch_completed:
+                # Mid-epoch save: record last fully completed epoch so that
+                # resuming restarts this epoch rather than skipping it.
+                ckpt["epoch"] = self.epoch - 1
+            torch.save(ckpt, "checkpoints/model_latest.pth")
             log.info("Saved model_latest.pth to {}".format(os.getcwd()))
             ckpt_path = os.path.join(os.getcwd(), "checkpoints/model_latest.pth")
         else:
@@ -766,7 +771,7 @@ class Trainer:
                 and i % self.cfg.training.save_every_x_iterations == 0
             ):
                 self.logs_flash_iter(iteration=i)
-                self.save_ckpt()
+                self.save_ckpt(epoch_completed=False)
 
     @torch.no_grad()
     def val(self):
