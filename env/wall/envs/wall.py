@@ -45,6 +45,18 @@ class DotWall(gym.Env):
         self.left_wall_x = self.wall_x - self.wall_config.wall_width // 2
         self.right_wall_x = self.wall_x + self.wall_config.wall_width // 2
 
+        self.action_space = gym.spaces.Box(
+            low=-2.0, high=2.0, shape=(2,), dtype=np.float32
+        )
+        self.observation_space = gym.spaces.Dict({
+            'visual': gym.spaces.Box(
+                low=0.0, high=255.0, shape=(3, self.img_size, self.img_size), dtype=np.float32
+            ),
+            'proprio': gym.spaces.Box(
+                low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
+            ),
+        })
+
         self.reset_to_state = None
     
     def channels_to_img(self, wall_img, dot_img):
