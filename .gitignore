@@ -3,6 +3,7 @@ __pycache__
 figures
 *outputs*
 data
+!env/wall/data/
 wandb
 checkpoints
 *.slurm
