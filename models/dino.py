@@ -119,6 +119,8 @@ class DinoV2Encoder(nn.Module):
         super().__init__()
         self.name = name
         self.base_model = torch.hub.load("facebookresearch/dinov2", name)
+        for param in self.base_model.parameters():
+            param.requires_grad = False
         self.feature_key = feature_key
         self.emb_dim = self.base_model.num_features
         self.projector_name = projector

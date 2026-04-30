@@ -39,7 +39,7 @@ training:
   decoder_start_epoch: 1  # start optimizing decoder at this epoch
   reconstruct_every_x_batch: 1000
   num_reconstruct_samples: 5
-  encoder_lr: 1e-5
+  encoder_lr: 1e-6
   decoder_lr: 3e-4
   predictor_lr: 5e-4
   action_encoder_lr: 5e-4
