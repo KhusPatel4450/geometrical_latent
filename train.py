@@ -652,7 +652,13 @@ class Trainer:
                     aggregator = AlignedMTL(scale_mode=self.amtl_scale_mode)
                 elif self.moo_algorithm == "upgrad":
                     from torchjd.aggregation import UPGrad
-                    aggregator = UPGrad()
+                    import torch as _torch
+                    if "prediction" in self.moo_objectives:
+                        pv = _torch.zeros(len(moo_losses))
+                        pv[self.moo_objectives.index("prediction")] = 1.0
+                        aggregator = UPGrad(pref_vector=pv)
+                    else:
+                        aggregator = UPGrad()
                 elif self.moo_algorithm == "mgda":
                     from torchjd.aggregation import MGDA
                     aggregator = MGDA()
