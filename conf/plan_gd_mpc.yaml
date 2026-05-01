@@ -24,6 +24,7 @@ hydra:
 ckpt_base_path: ./checkpoints # model to load for planning
 model_name: null
 model_epoch: latest
+wandb_run_name: null
 
 seed: 100
 n_evals: 50
