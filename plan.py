@@ -451,7 +451,10 @@ def planning_main(cfg_dict):
         wandb_run = wandb.init(
             project=f"plan_{cfg_dict['planner']['name']}", config=cfg_dict
         )
-        wandb.run.name = "{}".format(output_dir.split("plan_outputs/")[-1])
+        if cfg_dict.get("wandb_run_name"):
+            wandb.run.name = cfg_dict["wandb_run_name"]
+        else:
+            wandb.run.name = "{}".format(output_dir.split("plan_outputs/")[-1])
     else:
         wandb_run = None
 
